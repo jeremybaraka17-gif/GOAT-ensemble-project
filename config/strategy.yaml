@@ -1,0 +1,94 @@
+# goat_5k_ensemble_project — locked configuration
+#
+# Every value here must trace to an entry in research/decisions_log.md.
+# Do NOT add a parameter here without a corresponding logged decision.
+# Fields marked TODO/BLOCKED are placeholders, not defaults — the engine
+# should refuse to run against a config that still has a null/BLOCKED field.
+
+account:
+  broker: GFT
+  model: "2-Step GOAT"
+  size_usd: 5000
+  cost_usd: 36             # CONFIRMED via direct checkout, 2026-09-01 — see decisions_log.md
+
+evaluation_rules:
+  step1_profit_target_pct: 8
+  step2_profit_target_pct: 6
+  daily_drawdown_pct: 4          # applies identically across step1/step2/funded
+  max_static_loss_pct: 10
+  min_valid_trading_days_per_step: 3
+  valid_trading_day_min_profit_pct: 0.5   # of initial balance, on that day
+
+funded_rules:
+  payout_cycle_days: 14
+  profit_split_pct: 80
+  daily_profit_cap_usd: 3000
+  min_valid_days_per_payout_cycle: 3       # 4 if purchased on/after 2026-07-25
+  min_valid_days_effective_date_change: "2026-07-25"
+  min_valid_days_after_change: 4
+  initial_two_payouts_withdrawal_cap_pct: 4   # of initial balance — $5k-specific exception (standard is 6%)
+
+leverage:
+  evaluation:
+    forex: 100
+    indices_commodities: 20
+    crypto: 2
+  funded:
+    forex: 50
+    indices_commodities: 10
+    crypto: 2
+
+goat_guard:
+  applies_at: "funded_only"
+  trigger_combined_floating_loss_pct: 2      # of account balance, across ALL open positions
+  first_trigger: "soft_breach_split_cut_to_50pct_permanent"
+  second_trigger: "hard_breach_account_closed"
+  modeling_method: "M15_intrabar"            # daily-HL rejected — see decisions_log.md
+
+graduation:
+  trigger_type: "payout_count"
+  payout_count_threshold: 3                  # LOCKED — do not change after seeing results
+
+instrument_universe:
+  status: "CONFIRMED"
+  confirmed_specs_source: "live $5k GOAT account, order_calc_margin(), 2026-09-01"
+  candidates:
+    usdjpy: {min_lot: 0.01, margin_at_min_lot_usd: 10.00, pct_of_balance: 0.2}
+    audcad: {min_lot: 0.01, margin_at_min_lot_usd: 7.14, pct_of_balance: 0.1}
+    eurusd: {min_lot: 0.01, margin_at_min_lot_usd: 11.59, pct_of_balance: 0.2}
+    usdcad: {min_lot: 0.01, margin_at_min_lot_usd: 10.00, pct_of_balance: 0.2}
+    eurjpy: {min_lot: 0.01, margin_at_min_lot_usd: 11.59, pct_of_balance: 0.2}
+    gbpusd: {min_lot: 0.01, margin_at_min_lot_usd: 13.54, pct_of_balance: 0.3}
+    wti:    {min_lot: 0.01, margin_at_min_lot_usd: 4.41, pct_of_balance: 0.1}
+  btc_decision: "EXCLUDED — 2026-09-01, consistent with P12's finding on a
+    related capacity mechanism at $10k. BTCUSD's min-lot margin footprint
+    (7.9% of balance, ~30-80x every other instrument) would force the
+    cushion-proportional sizing model's target weight to be overridden by
+    the exchange's minimum lot rather than the model's own risk allocation
+    — the same sophistication-for-one-leg tradeoff this project's own
+    research pattern (six straight sophistication-over-simplicity failures
+    in prop_firm_project) has consistently found not worth it. Can be
+    revisited as its own explicit follow-on hypothesis later if there's
+    appetite — not silently reconsidered mid-P32."
+
+engine:
+  signal: "ma200"                             # ported from Arm CC, unchanged for now
+  stop: "chandelier_2x_atr20"                 # ported from Arm CC, unchanged for now
+  sizing: "cushion_proportional"              # ported from Arm CC — base risk R is what P32 is solving for
+  base_risk_pct: null                         # BLOCKED — this is the P32 hypothesis's output, not an input
+
+data:
+  history_pull_status: "CONFIRMED_2026-09-01"
+  m15_pull_script: "data/pull_m15_history.py"
+  m15_confirmed_depth:
+    # server-side M15 retention is a fixed ~100,000-bar cap, not a fixed
+    # calendar window — depth below varies by instrument's trading-hours
+    # coverage. See research/decisions_log.md for full reasoning.
+    usdjpy: {bars: 100000, earliest: "2022-08-04", years: 4.1}
+    audcad: {bars: 100000, earliest: "2022-08-04", years: 4.1}
+    eurusd: {bars: 100000, earliest: "2022-08-04", years: 4.1}
+    usdcad: {bars: 100000, earliest: "2022-08-04", years: 4.1}
+    eurjpy: {bars: 100000, earliest: "2022-08-04", years: 4.1}
+    gbpusd: {bars: 100000, earliest: "2022-08-04", years: 4.1}
+    wti:    {bars: 100000, earliest: "2022-03-10", years: 4.5}
+    btcusd: {bars: 100000, earliest: "2023-10-06", years: 2.9}   # shallowest — flagged caveat, see decisions_log.md

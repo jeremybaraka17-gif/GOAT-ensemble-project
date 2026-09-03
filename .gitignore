@@ -1,0 +1,21 @@
+# Raw price data — large, regenerable via data/pull_m15_history.py, not committed
+data/raw/*.csv
+
+# Governor / local run state — contains real account state, must NEVER be
+# committed. Pattern fixed 2026-09-03: the original "governor_state.json"
+# was an exact-match pattern that did NOT catch the actual filename used
+# (p32_governor_state.json) — would have committed real account state to
+# a public-by-default repo. Using a wildcard now so this can't recur if
+# the filename changes again.
+*governor_state.json
+*_live_run_log.csv
+.env
+
+# Monte Carlo per-path data — large, regenerable via
+# backtest/generate_montecarlo_data.py, not committed
+montecarlo_*.csv
+
+# Python
+__pycache__/
+*.pyc
+.venv/
