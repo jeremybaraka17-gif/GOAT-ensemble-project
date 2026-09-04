@@ -96,12 +96,39 @@ def _save_state(state):
         json.dump(state, f, indent=2)
 
 
-def initialize_challenge(force: bool = False):
+def initialize_challenge(force: bool = False, day_start_reference: float = None):
     """Run ONCE, manually, at the start of a challenge attempt — or
     again, deliberately, after a breach when a fresh account is
     purchased (a genuine new attempt, not a bug to guard against the way
     prop_firm_project's version does for a single long-lived account).
-    Refuses to silently overwrite existing state unless force=True."""
+    Refuses to silently overwrite existing state unless force=True.
+
+    day_start_reference: FIX (2026-09-03) for a real bug caught on the
+    first live dry-run. Previously hardcoded to INITIAL_ACCOUNT_BALANCE
+    unconditionally — correct ONLY for a truly fresh, zero-history
+    account, but wrong for LATE initialization (governor script
+    initialized after real trading history already exists on the
+    account). A live test found this exact case: the account had ~4
+    months of trading history (April-September) totaling a real,
+    accumulated -$180.18 loss, but initializing today with the hardcoded
+    $5,000 reference made the DAILY drawdown check read that entire
+    4-month history as if it happened in the last 24 hours — landing
+    almost exactly on the 3.6% halt threshold by coincidence of timing,
+    not a real event. Fixed by accepting the REAL current balance/equity
+    (read from MT5 at init time by the CLI below) instead of assuming
+    day one always starts at the untouched original balance. Defaults to
+    None -> falls back to INITIAL_ACCOUNT_BALANCE, preserving the
+    original behavior for a genuinely fresh account or any programmatic
+    caller that doesn't have live MT5 access to pass a real value.
+
+    NOTE: stage_start_balance is DELIBERATELY NOT changed by this fix —
+    it stays pegged to INITIAL_ACCOUNT_BALANCE always, because Step 1's
+    8% profit target is genuinely defined relative to the account's true
+    original $5,000 balance (confirmed FAQ wording), not to whatever
+    balance happens to exist whenever this script gets initialized. Only
+    the DAILY check needed fixing; the static/stage-progress checks were
+    already correct.
+    """
     existing = _load_state()
     if existing and not force:
         raise RuntimeError(
@@ -111,11 +138,12 @@ def initialize_challenge(force: bool = False):
             f"a breach and rebuy)."
         )
     today = date.today().isoformat()
+    effective_day_start = day_start_reference if day_start_reference is not None else INITIAL_ACCOUNT_BALANCE
     state = {
         "stage": Stage.STEP1.value,
         "challenge_start_date": today,
-        "stage_start_balance": INITIAL_ACCOUNT_BALANCE,
-        "day_start_reference": INITIAL_ACCOUNT_BALANCE,  # higher of balance/equity at last 5PM EST snapshot
+        "stage_start_balance": INITIAL_ACCOUNT_BALANCE,  # NOT changed by the fix — see docstring
+        "day_start_reference": effective_day_start,
         "last_recorded_date": today,
         "valid_days_count_current_cycle": 0,
         "current_cycle_start_date": today,
@@ -340,6 +368,14 @@ def check_goat_guard(combined_floating_pnl: float, current_balance: float):
     return GovernorState.NORMAL, diagnostics
 
 
+CONFIRMED_ACCOUNT_LOGIN = 414222731  # GoatFunded-Server2 — same guard used
+                                        # in p32_signal_workflow.py, duplicated
+                                        # here deliberately (not imported from
+                                        # there) so this file's CLI can verify
+                                        # identity without depending on the
+                                        # signal workflow module at all
+
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Initialize or inspect the P32 GOAT account governor state.")
@@ -349,7 +385,50 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.init:
-        state = initialize_challenge(force=args.force)
+        # FIX (2026-09-03): connect to MT5 and read the REAL current
+        # balance/equity for day_start_reference, rather than assuming a
+        # fresh $5,000 start — see initialize_challenge()'s docstring for
+        # the real bug this caught on the first live dry-run. Same
+        # account-identity guard used everywhere else real account data
+        # is touched, applied here too — initializing against the wrong
+        # account's balance would be exactly the kind of cross-account
+        # mistake this project's discipline exists to prevent.
+        try:
+            import MetaTrader5 as mt5
+            if not mt5.initialize():
+                raise RuntimeError(f"mt5.initialize() failed: {mt5.last_error()}")
+            account = mt5.account_info()
+            if account is None:
+                mt5.shutdown()
+                raise RuntimeError("Connected but could not read account info.")
+            if account.login != CONFIRMED_ACCOUNT_LOGIN:
+                mt5.shutdown()
+                raise RuntimeError(
+                    f"ACCOUNT IDENTITY MISMATCH: connected to login {account.login}, "
+                    f"expected {CONFIRMED_ACCOUNT_LOGIN}. Aborting — refusing to "
+                    f"initialize governor state against the wrong account."
+                )
+            real_balance, real_equity = account.balance, account.equity
+            mt5.shutdown()
+            day_start_ref = max(real_balance, real_equity)
+            print(f"Connected: {account.company} | Account {account.login} | "
+                  f"Balance: ${real_balance:,.2f} | Equity: ${real_equity:,.2f}")
+            print(f"Using ${day_start_ref:,.2f} as day_start_reference (NOT the "
+                  f"hardcoded $5,000 default — see the 2026-09-03 fix).")
+        except ImportError:
+            print("WARNING: MetaTrader5 not installed — cannot read real account "
+                  "state. Falling back to the hardcoded $5,000 default, which is "
+                  "ONLY correct for a genuinely fresh, zero-history account.")
+            day_start_ref = None
+        except Exception as e:
+            print(f"WARNING: could not read live MT5 state ({e}) — falling back "
+                  f"to the hardcoded $5,000 default, which is ONLY correct for a "
+                  f"genuinely fresh, zero-history account. If this account already "
+                  f"has trading history, fix this before proceeding, don't "
+                  f"proceed on the fallback.")
+            day_start_ref = None
+
+        state = initialize_challenge(force=args.force, day_start_reference=day_start_ref)
         print(f"Governor initialized: {state}")
     elif args.show:
         state = _load_state()
