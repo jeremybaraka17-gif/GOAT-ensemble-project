@@ -1156,6 +1156,236 @@ rebuild size after any drawdown — raises a real possibility that 1.4%
 sizing AT — a different question than what was optimized for constant
 sizing. Worth keeping in mind when reading the full comparison's result.
 
+## 2026-09-02 — Cushion sizing: CLOSED, constant-risk 1.4% stands as validated
+Second-pass comparison (cushion at 2.0% and 3.0% base risk, 52 points
+each, vs. the established constant-1.4% reference) completed:
+
+| Config | InclTrunc EV/day | Grad % (of full-budget) |
+|---|---|---|
+| constant 1.4% | 1.209 | 95.6% |
+| cushion 1.4% | -0.137 | — (0 full-budget completions) |
+| cushion 2.0% | -0.111 | 50.0% |
+| cushion 3.0% | 0.020 | 100.0% |
+
+Cushion improves monotonically with base risk (confirms the base-risk-
+mismatch hypothesis was PART of the story), but even at 3.0% — more than
+double the locked constant-risk figure — it lands ~60x below constant-
+risk's 1.209. This is a real, wide, consistent margin across three
+tested points, not a close call needing further resolution the way the
+earlier risk-level anomalies did (those were 10-30% gaps; this is 60x).
+
+**Independently converges with existing evidence**: prop_firm_project's
+own P14 finding ("the cushion mechanism itself was NOT the main EV
+driver") reached the same conclusion for a different account structure.
+Real, convergent evidence, not coincidence.
+
+**Decision: closed.** Constant-risk sizing at 1.4% base risk stands as
+the validated engine configuration for this project. Cushion-proportional
+sizing, at the D_MAX=0.08/FLOOR=0.15 calibration built and tested here,
+does not have a credible path to competitiveness within a reasonable
+testing budget (this comparison alone cost ~140 minutes for two risk
+levels). Not pursuing further recalibration of cushion's own parameters
+(D_MAX/FLOOR) without a specific reason to revisit — that would be a
+different, new investigation, not a continuation of this one.
+
+## STATUS: P32 core research question resolved
+Locked configuration: GFT 2-Step GOAT $5k account, 7-instrument universe
+(USDJPY, AUDCAD, EURUSD, USDCAD, EURJPY, GBPUSD, WTI — BTCUSD excluded),
+200-day MA signal, 2xATR(20) Chandelier stop, CONSTANT-RISK sizing at
+1.4% base risk, real vol-scaled transaction costs, confirmed POINT_SIZE
+and contract specs, 3-payout graduation trigger, $36 account cost. This
+is the answer the ensemble-EV Monte Carlo was built to find.
+
+## 2026-09-03 — Chandelier trailing stop re-validated fresh for P32 (not inherited on faith)
+The Chandelier stop mechanism was carried over from `prop_firm_project`'s
+Arm CC engine, validated there on a different account and universe — it
+had never been freshly re-tested against a naive benchmark specifically
+for P32. Built `use_trailing_stop` parameter into `simulate_portfolio()`
+(default True, fully backward-compatible — confirmed via identical
+smoke-test output before/after) to enable exactly this comparison: same
+signal, same entries, same 1.4% risk sizing, differing ONLY in exit rule
+(Chandelier trailing stop vs. exit-on-signal-reversal-only).
+
+**Result, same 7-year path, locked 1.4% risk:**
+
+| | LOCKED (Chandelier) | NAIVE (signal-reversal only) |
+|---|---|---|
+| Total return | 614.86% | 233.37% |
+| Sharpe | 1.691 | 1.049 |
+| Max drawdown | -21.19% | -22.44% |
+| Closed trades | 793 | 231 |
+
+**Confirmed: the stop earns its keep.** Independently replicates
+prop_firm_project's own finding ("2xATR trailing stop is a real
+improvement over a fixed stop") on genuinely different data — not
+inherited unquestioned. Honest nuance: the benefit is almost entirely in
+return efficiency, not drawdown reduction — max DD is nearly identical
+between the two variants. The stop also roughly triples trade frequency
+(793 vs 231), since the naive version holds through the full 200-day-MA
+reversal cycle while the stop exits and re-enters far more often.
+
+Figure saved: `figures/07_chandelier_stop_vs_naive_ma.png`.
+
+## 2026-09-03 — First genuine Monte Carlo distribution figures, real per-path data
+User uploaded `montecarlo_1.4pct_locked.csv` (256 paths, locked 1.4% risk,
+generated via `generate_montecarlo_data.py`). First time any figure in
+this project is built from actual per-path results rather than aggregate
+summary statistics.
+
+**Real finding surfaced immediately, not hidden:** the first several rows
+show IDENTICAL `net_ev` across different starting dates — confirmed not
+a bug: nearby starting points converge onto the same breach date (the
+2020-02-28 COVID drawdown, seen repeatedly throughout this project),
+after which their rebuy chains become identical. 256 rows contain only
+135 unique `net_ev` outcomes — direct, visible confirmation of the
+"starting points are not independent draws" caveat stated throughout
+this project, now shown in real data rather than just argued abstractly.
+
+**EV/day distribution (223 full-budget paths):** ZERO negative outcomes
+— a genuinely clean, one-sided result. Mean 1.466 pulled well above
+median 1.097 by a real right tail of strong outcomes above 3.0.
+
+**Outcome breakdown (all 256 raw paths):** 82% graduated, 13% data-
+exhausted (real data ran out before resolving), 5% budget-exhausted
+(ran the full 3-year budget without graduating).
+
+**Days-to-graduate (211 graduated paths):** mean 438, median 327 —
+right-skewed, real bimodal-ish shape: a fast cluster around 150-400
+days, then a genuine long tail out to 1,200+ days from slower,
+many-rebuy paths. Useful, concrete range to set real expectations
+against, not just a single average.
+
+Figures saved: `figures/08_montecarlo_ev_per_day_histogram.png`,
+`figures/09_montecarlo_outcomes_and_speed.png`.
+
+## 2026-09-03 — Project renamed: goat_5k_ensemble_project -> goat_ensemble_project
+Local folder and GitHub repo renamed for brevity ("5k" dropped) — no
+functional or configuration change, same locked answer (1.4% base risk,
+constant sizing), same account, same everything else. Renaming done
+BEFORE the first commit/push to avoid any git-history complications.
+`live/SETUP.md`'s hardcoded Task Scheduler paths updated to match — the
+one place in this project where the old name was baked into something
+functionally load-bearing, not just documentation text. Historical log
+entries above this one are NOT retroactively edited to say the new
+name — they're an accurate record of what the project was called at
+the time, consistent with this log's own discipline of recording
+forward, not rewriting history.
+
+## 2026-09-04 — Two genuinely missing metrics: CVaR and instrument correlation
+Prompted directly ("what's essential that hasn't been included") rather
+than discovered independently. The real answer wasn't a single missing
+ratio — it's a procedural gap (no locked OOS holdout; the 1.4% answer
+came from repeated resweeping of the same window, not a genuine
+out-of-sample check). Flagged that explicitly, then computed the two
+genuinely missing NUMBERS, from data already on hand.
+
+**VaR(5%) / CVaR(5%), computed on ALL 256 Monte Carlo paths** (not just
+the "clean" full-budget subset — using only the clean subset for a
+tail-risk metric would repeat exactly the truncation-bias mistake
+already caught and fixed this session): VaR(5%) = -36 USD, CVaR(5%) =
+-72 USD (average of the worst 13 paths). Worst single path: -108 USD.
+
+**Real, reassuring finding: 100% of the worst 5% of paths are
+DATA_EXHAUSTED**, not genuine strategy failure — real market history
+ran out before the path resolved, not the strategy losing badly. The
+tail is bounded and specific to this ~7-year data window's finite
+length, not open-ended catastrophic risk. Worth stating plainly: this
+doesn't mean the strategy has no real downside — it means THIS
+particular tail-risk measurement is dominated by a data-availability
+artifact, not a demonstrated failure mode. A genuinely bad trading
+outcome could still exist below this window's ability to show it.
+
+**Correlation matrix, all 7 instruments, full common history (daily log
+returns):** 4 pairs exceed |0.50| — EURUSD-GBPUSD (0.71), USDJPY-EURJPY
+(0.66), USDCAD-GBPUSD (-0.55), EURUSD-USDCAD (-0.52), all explained by
+shared USD/EUR/GBP exposure. The engine has treated these 7 instruments
+as independent risk sources throughout the entire project; this is the
+first time that assumption has actually been checked, not assumed.
+
+Figures saved: `figures/10_instrument_correlation_matrix.png`,
+`figures/11_cvar_tail_risk.png`.
+
+**Not yet addressed, flagged for a real decision:** whether the
+correlation finding should change anything (e.g., a correlation-aware
+position-sizing adjustment, or accepting the current equal-treatment
+approach with the concentration risk now at least known rather than
+assumed away) — this computation only surfaces the finding, doesn't
+resolve what to do about it.
+
+## 2026-09-04 — Real OOS test: honest assessment and the only genuine option available
+Directly asked whether a real out-of-sample test exists. Honest answer:
+NOT on the historical window used throughout this project — every
+sweep, resweep, and fix touched the entire 2019-2026-07 range
+iteratively. Nothing in that window can honestly be called "held out"
+any longer; it all informed the 1.4% decision, directly or indirectly.
+
+**The one genuinely clean option:** every D1 pull in this project ended
+at 2026-07-03 (reused from prop_firm_project, never refreshed for P32
+specifically). Data after that date never existed when any sweep ran —
+built `data/pull_d1_fresh_oos.py` to pull fresh D1 data and isolate
+exactly that never-seen slice for a real check on the LOCKED 1.4%
+configuration (no re-tuning, engine run as-is).
+
+**Falsification condition, locked BEFORE running, per this project's
+established discipline:** the engine should show directionally sensible
+behavior on the new slice — no anomalous crash, no data-integrity issue,
+return/drawdown roughly plausible for a short window. If badly
+inconsistent, that's a real finding requiring investigation, not
+explained away after the fact.
+
+**Honest scope, stated plainly, not oversold:** ~2 months of data (as of
+2026-09-04) is far too short for a statistically powerful Sharpe/EV
+estimate. This is a sanity check, not a definitive test. It cannot
+replace a genuine multi-month OOS holdout — it can only confirm or flag
+early whether the engine's behavior on truly fresh data is reasonable.
+
+**The real, gold-standard OOS going forward: live/forward results
+themselves.** Since a retrospective holdout is no longer available, the
+only fully uncontaminated test from here is real time passing — actual
+live trading (or continued forward paper-testing) accumulating without
+being used to re-tune 1.4%. Explicit commitment, stated here so it's on
+record: 1.4% is NOT re-optimized based on live results without a formal,
+pre-registered reason — live performance is the OOS record, not a new
+tuning input.
+
+## 2026-09-04 — The real OOS test, run and resolved
+User uploaded fresh D1 data pulled directly from the live account via
+`pull_d1_fresh_oos.py`. Genuinely never-seen slice isolated: 2026-07-06
+to 2026-09-07 (46 trading days), confirmed identical across all 7
+instruments, with full pre-OOS history (back to 2007-2010) preserved
+for correct 200-day MA/ATR warmup — computed using the SAME preparation
+functions already validated in `p32_signal_prep.py` (imported directly,
+not reimplemented), so this result uses precisely the same signal/cost
+logic as every other number in this project.
+
+**Real result:** OOS total return -3.26%, Sharpe -1.220 (46 days — low
+statistical power on its own, stated plainly), max drawdown -7.43%.
+Negative. Reported exactly as computed, not softened.
+
+**Checked against the falsification condition locked BEFORE running**
+(directionally sensible behavior, roughly consistent with what the
+historical distribution suggests is plausible for a short window):
+built the actual reference distribution — 1,774 overlapping 46-day
+rolling-return windows across the full 2019-2026 history already used
+throughout this project. The real OOS result lands at the **19th
+percentile** of that distribution — a below-average but statistically
+unremarkable stretch, well short of the 5th-percentile tail (-6.83%)
+that would have actually constituted a real concern.
+
+**Conclusion: falsification condition met.** The engine's behavior on
+genuinely fresh, never-touched data is consistent with its own
+historical variance, not anomalous. This does NOT retroactively make
+1.4% a validated, bulletproof number — a single 46-day window is still
+a sanity check, not a statistically powerful test, exactly as scoped
+before running it. But it's a real, honest, non-contaminated result,
+and it came back clean.
+
+Figure saved: `figures/12_real_oos_result_vs_historical_distribution.png`.
+
+**Standing commitment reaffirmed:** 1.4% is not re-tuned based on this
+or any future OOS/live result without a formal, pre-registered reason —
+this result is filed as evidence, not used to adjust anything.
+
 ## OPEN / BLOCKING — not yet resolved
 1. Instrument universe for this account size — the $10k account's
    7-instrument set (`prop_firm_project`) is NOT assumed to be feasible at

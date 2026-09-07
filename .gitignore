@@ -1,6 +1,10 @@
 # Raw price data — large, regenerable via data/pull_m15_history.py, not committed
 data/raw/*.csv
 
+# Fresh OOS pull output — same reasoning: large, regenerable via
+# data/pull_d1_fresh_oos.py, not committed
+backtest/oos_fresh/
+
 # Governor / local run state — contains real account state, must NEVER be
 # committed. Pattern fixed 2026-09-03: the original "governor_state.json"
 # was an exact-match pattern that did NOT catch the actual filename used
